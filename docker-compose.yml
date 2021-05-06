@@ -1,22 +1,9 @@
 version: '3.2'
 services:
     las:
-        image: registry.scontain.com:5050/sconecuratedimages/services:las-scone5.3.0
+        image: registry.scontain.com:5050/sconecuratedimages/kubernetes:las-scone5.3.0
         devices:
          - "${SGXDEVICE}"
-    cas:
-        image: registry.scontain.com:5050/sconecuratedimages/services:cas.preprovisioned-scone5.3.0
-        devices:
-         - "${SGXDEVICE}"
-        depends_on:
-         - las
-    cas_mrenclave_generator:
-        image: registry.scontain.com:5050/sconecuratedimages/services:cas.preprovisioned-scone5.3.0
-        devices:
-         - "${SGXDEVICE}"
-        command: sh -c "SCONE_HASH=1 cas > /shared_test_vol/cas_hash.txt"
-        volumes:
-         - .:/shared_test_vol            
     build_and_sconify:
         image: ${SCONIFY_IMAGE}
         command: bash -c "/helper_scripts/alpine_wait_for_las_and_cas.sh && /sconification/sconify_all.sh"
@@ -25,9 +12,18 @@ services:
             - ./images:/images
             - ./helper_scripts:/helper_scripts
             - /var/run/docker.sock:/var/run/docker.sock
+        environment:
+            - SWITCH_C=$SWITCH_C
+            - SWITCH_CPP=$SWITCH_CPP
+            - SWITCH_GO=$SWITCH_GO
+            - SWITCH_JAVA11=$SWITCH_JAVA11
+            - SWITCH_JAVA8=$SWITCH_JAVA8
+            - SWITCH_PYTHON=$SWITCH_PYTHON
+            - SWITCH_NODE=$SWITCH_NODE
+            - SWITCH_DEBUG=$SWITCH_DEBUG
+            - SWITCH_VERBOSE=$SWITCH_VERBOSE
         depends_on:
             - las
-            - cas
     c_native:
         image: ${C_NATIVE_IMAGE}
     c_scone_binaryfs:
@@ -38,7 +34,6 @@ services:
          - "${SGXDEVICE}"
         depends_on:
             - las
-            - cas
     cpp_native:
         image: ${CPP_NATIVE_IMAGE}
     cpp_scone_binaryfs:
@@ -49,7 +44,6 @@ services:
          - "${SGXDEVICE}"
         depends_on:
             - las
-            - cas
     go_native:
         image: ${GO_NATIVE_IMAGE}
     go_scone_fspf:
@@ -60,7 +54,6 @@ services:
          - "${SGXDEVICE}"
         depends_on:
             - las
-            - cas
     java_native:
         image: ${JAVA_NATIVE_IMAGE}
     java_scone_fspf:
@@ -71,7 +64,14 @@ services:
          - "${SGXDEVICE}"
         depends_on:
             - las
-            - cas
+    java_scone_binaryfs:
+        image: ${JAVA_TARGET_IMAGE_BINARYFS}
+        environment:
+         - SCONE_VERSION=1
+        devices:
+         - "${SGXDEVICE}"
+        depends_on:
+            - las
     java8_native:
         image: ${JAVA8_NATIVE_IMAGE}
     java8_scone_fspf:
@@ -82,7 +82,14 @@ services:
          - "${SGXDEVICE}"
         depends_on:
             - las
-            - cas
+    java8_scone_binaryfs:
+        image: ${JAVA8_TARGET_IMAGE_BINARYFS}
+        environment:
+         - SCONE_VERSION=1
+        devices:
+         - "${SGXDEVICE}"
+        depends_on:
+            - las
     python_native:
         image: ${PYTHON_NATIVE_IMAGE}
     python_scone_binfs:
@@ -93,4 +100,13 @@ services:
          - "${SGXDEVICE}"
         depends_on:
             - las
-            - cas
+    node_native:
+        image: ${NODE_NATIVE_IMAGE}
+    node_scone_binfs:
+        image: ${NODE_TARGET_IMAGE_BINFS}
+        environment:
+         - SCONE_VERSION=1
+        devices:
+         - "${SGXDEVICE}"
+        depends_on:
+            - las
