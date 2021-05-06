@@ -1,67 +1,65 @@
-This is a demonstration of _sconification_ process for C,C++,Go and Java languages.
+This is a demonstration of _sconification_ process for C,C++,Go,Python,Node and Java languages.
 
-The entry point could be considered `start.sh` script that does everything:
+`start.sh` script that does the following:
 1) Build native image from provided Dockerfile
 2) Sconifies native image and adds to it FSFP or binaryFS.
-3) Runs all native and sconified images.
+3) Runs all (or specified with flags) native and sconified images.
 
 An important file is `/sconification/evn.sh`. It holds the names of all the images that are either used for _sconification_ or
 will be created during this process.
+This variable in `/sconification/evn.sh` controls name of the image that is used fro sconification (or `-i` option of `start.sh`)
+```
+export SCONIFY_IMAGE="registry.scontain.com:5050/vasyl/test-images:sconify-image-5.3.2"
+```
+
 
 All languages have associated folders in `image` folder.
 
 Sconification is done by the script `/sconification/sconify_all.sh`.
 This script contains separate functions that are responsible for the sconification of one language and one type of file system.
 
-For example, the following function is responsible for the sconification of Go+FSPF.
+For example, the following function is responsible for the sconification of Java+binaryFS.
 ```
-function go_image_fspf(){
-    echo "Making GO with fspf"
-    SCONE_HEAP=2G
-
-    export NAMESPACE="sconify-ns-$RANDOM$RANDOM$RANDOM$RANDOM"
-    export SESSION=$(
     sconify_image \
+            --from="${JAVA_NATIVE_IMAGE}" \                     <= Name of native image
+            --to="${JAVA_TARGET_IMAGE_BINARYFS}" \              <= Name of sconified image
+            --namespace="${NAMESPACE}" \                        <= Name of our namespace
             --create-namespace \                                <= Here we request creation of namespace on CAS
-            --namespace=$NAMESPACE \                            <= Name of our namespace
-            --name=$GO_SESSION_NAME \                           <= Name of the session within our namespace
-            --from=$GO_NATIVE_IMAGE \                           <= Tag of native image
-            --to=$GO_TARGET_IMAGE_FSPF \                        <= Tag of sconified image
-            --cas=$SCONE_CAS_ADDR_L \                           <= CAS address (will be embedded in image as ENV)
-            --las=$SCONE_LAS_ADDR_L \                           <= LAS address (will be embedded in image as ENV)
-            --cli=$CLI_IMAGE \                                  <= SCONE image that has CLI tool (internal use by sconify_image)
-            --crosscompiler=$CROSSCOMPILER_IMAGE \              <= SCONE image that has crosscompiler tool (internal use by sconify_image)
+            --name="${JAVA_SESSION_NAME}" \                     <= Name of the session within our namespace
+            --service-name="${JAVA_SERVICE_NAME_BINARYFS}" \    <= Nave of the service within our session
+            --command="java -jar /app/app.jar" \                <= Command that will be executed by our container
             --cas-debug \                                       <= We attest cas in debug mode
-            --binary=$GO_BINARY \                               <= Binary within image that we wish to sconify
-            --dir=/app \                                        <= Directory that we wish to include in FSPF (encryption+integrity protection)
-            --heap=$SCONE_HEAP \                                <= Heap size (will be use by SCONE signer)
-            --stack=$SCONE_STACK \                              <= Stack size (will be use by SCONE signer)
-            --dlopen=$SCONE_ALLOW_DLOPEN \                      <= Permission for library loading size (will be use by SCONE signer)
-            --command="${GO_BINARY} -session -added -this" \    <= Command that will be executed by our container
-            --env="ID=FSFP" \                                   <= Adding env variable to our session
+            --cas="${SCONE_CAS_ADDR_L}" \                       <= CAS address (will be embedded in image as ENV)
+            --las="${SCONE_LAS_ADDR_L}" \                       <= LAS address (will be embedded in image as ENV)
+            --cli="${CLI_IMAGE}" \                              <= SCONE image that has CLI tool (internal use by sconify_image)
+            --crosscompiler="${CROSSCOMPILER_IMAGE}" \          <= SCONE image that has crosscompiler tool (internal use by sconify_image)
+            --binary="${JAVA_BINARY}" \                         <= Binary within image that we wish to sconify
+            --heap="${SCONE_HEAP}" \                            <= Heap size (will be use by SCONE signer)
+            --stack="${SCONE_STACK}" \                          <= Stack size (will be use by SCONE signer)
+            --dlopen="${SCONE_ALLOW_DLOPEN}" \                  <= Permission for library loading size (will be use by SCONE signer)
+            --binary-fs \                                       <= Request binaryFS mode for final image
+            --fs-dir=/app \                                     <= Directory that we wish to include in binaryFS                             
+            --host-path=/etc/hosts \                            <= Allow binary with binaryFS access to this file on host file system
+            --host-path=/etc/resolv.conf \                      <= -//-                                                              
             --no-color                                          <= Print without color
-        )
-    
-    echo "Done making GO with fspf"
-}
 ```
 If you wish to check the other options of `sconify_image`, you could run:
 ```
-docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock registry.scontain.com:5050/sconecuratedimages/iexec-sconify-image:5.3.1
+docker run -it --rm registry.scontain.com:5050/vasyl/test-images:sconify-image-5.3.3
 ```
-As a result of sconification we obtain $GO_TARGET_IMAGE_FSPF image that we run with docker-compose.
+As a result of sconification we obtain $JAVA_TARGET_IMAGE_BINARYFS image that we run with docker-compose.
 ```
-docker-compose run go_scone_fspf
+docker-compose run java_scone_binaryfs
 ```
 
 In `docker-compose.yml`, the above service corresponds to:
 ```
-    go_scone_fspf:
-        image: ${GO_TARGET_IMAGE_FSPF}
+    java_scone_binaryfs:
+        image: ${JAVA_TARGET_IMAGE_BINARYFS}
         environment:
          - SCONE_VERSION=1
         devices:
-         - "/dev/isgx"
+         - "${SGXDEVICE}"
         depends_on:
             - las
             - cas
@@ -69,6 +67,8 @@ In `docker-compose.yml`, the above service corresponds to:
 
 And if everything went smoothly, you will see output similar to this one:
 ```
+Starting hello-world_las_1 ... done
+Starting hello-world_cas_1 ... done
 export SCONE_QUEUES=4
 export SCONE_SLOTS=256
 export SCONE_SIGPIPE=0
@@ -77,7 +77,7 @@ export SCONE_SSPINS=100
 export SCONE_SSLEEP=4000
 export SCONE_TCS=8
 export SCONE_LOG=WARNING
-export SCONE_HEAP=2147483648
+export SCONE_HEAP=4294967296
 export SCONE_STACK=4194304
 export SCONE_CONFIG=autogenerated
 export SCONE_ESPINS=10000
@@ -86,13 +86,39 @@ export SCONE_ALLOW_DLOPEN=yes (unprotected)
 export SCONE_MPROTECT=no
 export SCONE_FORK=no
 musl version: 1.1.24
-SCONE version: 5.2.1-42-gea2f241e0-robert/ee-sconify-image (Wed Mar 31 17:10:38 2021 +0000) (repository state: dirty)
-Enclave hash: 4cf88e47762a76990a44314669379e6064d0ada05d6b992731b60e991a70895d
-.....Some warnings were cut out.....
-ID of thi program is: FSFP
-My args are: 
-[/app/print-secret-message -session -added -this]
-Go secretly say Hello Scone!
+SCONE version: 5.3.0-48-gb57eea3c5-robert/sconify-maintenance (Wed Apr 21 08:56:03 2021 +0000) (repository state: dirty)
+Enclave hash: 4f88313b1b6d74605813c8b66aeba2f562c56996557205d4a9fd4bb9761b74b2
+[SCONE|WARN] src/enclave/dispatch.c:181:print_version(): Application runs in SGX debug mode. Its memory can be read from outside the enclave with a debugger! This is not secure!
+[SCONE|WARN] src/syscall/syscall.c:34:__scone_ni_syscall(): system call: membarrier, number 324 is not implemented.
+[SCONE|WARN] src/syscall/syscall.c:34:__scone_ni_syscall(): system call: membarrier, number 324 is not implemented.
+Picked up JAVA_TOOL_OPTIONS: -Xmx256m
+[SCONE|WARN] src/shielding/proc_fs.c:384:_proc_fs_open(): open: /proc/self/mountinfo is not supported
+[SCONE|WARN] src/shielding/proc_fs.c:384:_proc_fs_open(): open: /proc/self/coredump_filter is not supported
+[SCONE|WARN] src/shielding/proc_fs.c:384:_proc_fs_open(): open: /proc/self/coredump_filter is not supported
+[SCONE|WARN] src/syscall/syscall.c:34:__scone_ni_syscall(): system call: membarrier, number 324 is not implemented.
+[SCONE|WARN] src/shielding/shielded_syscall.c:1127:handler(): Emulating file memory mapping for fd 3 (/usr/lib/jvm/java-11-openjdk/lib/modules)
+[SCONE|WARN] src/shielding/shielded_syscall.c:1262:emulate_memory_mapping(): The application requested to map a file (/usr/lib/jvm/java-11-openjdk/lib/modules) into memory such that modifications will be synchronized between the memory mapping and the file (MAP_SHARED option).
+        SCONE is unable to protect such file interactions due to limitations of SGX.
+        The memory mapping will be created without file synchronization as most programs do not
+        rely on the file synchronization.
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+[SCONE|WARN] tools/starter/ethread.c:314:enclave_thread(): Protected heap memory exhausted! Set SCONE_HEAP environment variable to increase it. Available memory: 1051092 kB
+Hello World Java!
+[SCONE|WARN] src/syscall/syscall.c:34:__scone_ni_syscall(): system call: membarrier, number 324 is not implemented.
+[SCONE|WARN] src/shielding/ephemeral.c:1269:_fs_ephemeral_handle_fd_syscall(): fcntl(X, 3, 0) reached a SCONE ephemeral file descriptor.
+[SCONE|WARN] src/shielding/proc_fs.c:384:_proc_fs_open(): open: /proc/net/ipv6_route is not supported
+
+<You will see here content of repl from example.com>
+<You will see here content of /etc/hosts>
+<You will see here content of /etc/resolv.conf>
+
+
+Java SCONE binaryFS images is done! 
 ```
 
 Happy Sconification!
